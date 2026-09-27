@@ -129,8 +129,8 @@ export default function WordImport({ appendListId, appendListName }: { appendLis
       const needMeaning = items.filter((w) => !w.meaning).map((w) => w.word);
       let done = 0;
       let failed = 0;
-      for (let i = 0; i < needMeaning.length; i += 60) {
-        const batch = needMeaning.slice(i, i + 60);
+      for (let i = 0; i < needMeaning.length; i += 30) {
+        const batch = needMeaning.slice(i, i + 30);
         setImportMsg(`AI 配释义 ${done}/${needMeaning.length}…（可放心等待，进度不会丢）`);
         try {
           const res = await fetch("/api/meanings", {
@@ -176,8 +176,8 @@ export default function WordImport({ appendListId, appendListName }: { appendLis
       const listId = await ensureListId();
       const need = parsed.filter((w) => picked.has(normWord(w.word)) && !w.meaning).map((w) => w.word);
       let done = 0;
-      for (let i = 0; i < need.length; i += 60) {
-        const batch = need.slice(i, i + 60);
+      for (let i = 0; i < need.length; i += 30) {
+        const batch = need.slice(i, i + 30);
         setImportMsg(`重试 AI 配释义 ${done}/${need.length}…`);
         const res = await fetch("/api/meanings", {
           method: "POST",

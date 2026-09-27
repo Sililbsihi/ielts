@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   if (!text || typeof text !== "string" || text.trim().length < 20) {
     return NextResponse.json({ ok: false, error: "文本太短" }, { status: 400 });
   }
-  const chunk = String(text).slice(0, 9000);
+  const chunk = String(text).slice(0, 3000);
   const prompt = `下面是从雅思真题 PDF 里抽取出来的一段原始文本，格式很乱（可能混有页眉、微博水印、页码、题号）。请把它整理成一道道独立的写作题目。
 要求：
 1. 每道题输出完整题干（把被换行打断的句子拼回去；去掉"新浪微博：@xxx"、纯页码、目录行等与题干无关的内容）

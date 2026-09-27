@@ -83,8 +83,8 @@ function Inner() {
     setFillBusy(true);
     let done = 0;
     let fail = "";
-    for (let i = 0; i < need.length; i += 60) {
-      const batch = need.slice(i, i + 60);
+    for (let i = 0; i < need.length; i += 30) {
+      const batch = need.slice(i, i + 30);
       setFillMsg(`AI 补释义 ${done}/${need.length}…`);
       try {
         const res = await fetch("/api/meanings", {

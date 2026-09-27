@@ -60,8 +60,8 @@
       "static/chunks/117-81a140dcbdad3b75.js",
       "static/chunks/main-app-4479557f57c91736.js",
       "static/chunks/972-2adb499283b2862d.js",
-      "static/chunks/354-8a1b75c113765f18.js",
-      "static/chunks/app/words/[id]/page-169112bf96e19b7d.js"
+      "static/chunks/354-54f9b3d1a656054f.js",
+      "static/chunks/app/words/[id]/page-c6d4790cf4e0fb7f.js"
     ],
     "/words/[id]/recite/page": [
       "static/chunks/webpack-146869d058beb808.js",
@@ -76,7 +76,7 @@
       "static/chunks/fd9d1056-3827b4ee963f968a.js",
       "static/chunks/117-81a140dcbdad3b75.js",
       "static/chunks/main-app-4479557f57c91736.js",
-      "static/chunks/354-8a1b75c113765f18.js",
+      "static/chunks/354-54f9b3d1a656054f.js",
       "static/chunks/app/words/new/page-6842a5b0e8916e83.js"
     ],
     "/words/page": [
@@ -101,7 +101,7 @@
       "static/chunks/117-81a140dcbdad3b75.js",
       "static/chunks/main-app-4479557f57c91736.js",
       "static/chunks/972-2adb499283b2862d.js",
-      "static/chunks/app/writing/page-33b909a2e910bcaa.js"
+      "static/chunks/app/writing/page-2c537e33c3eda4c6.js"
     ],
     "/writing/practice/page": [
       "static/chunks/webpack-146869d058beb808.js",

@@ -60,7 +60,7 @@ export default function WritingPage() {
     const chunks: string[] = [];
     let cur = "";
     for (const p of paras) {
-      if ((cur + "\n" + p).length > 7000 && cur) {
+      if ((cur + "\n" + p).length > 3000 && cur) {
         chunks.push(cur);
         cur = p;
       } else cur = cur ? cur + "\n" + p : p;
