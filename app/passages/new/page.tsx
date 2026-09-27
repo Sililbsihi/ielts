@@ -103,17 +103,16 @@ function Inner() {
 
   const sortedMarks = [...marks].sort((a, b) => a.start - b.start);
 
-  /** 把 body 按挖空切段渲染 */
+  /** 把 body 按挖空切段渲染（划词模式下保留原文可见，仅高亮） */
   function renderMarked() {
     const nodes: React.ReactNode[] = [];
     let cursor = 0;
     sortedMarks.forEach((m, i) => {
       if (m.start > cursor) nodes.push(<span key={`t${i}`}>{body.slice(cursor, m.start)}</span>);
       const w = body.slice(m.start, m.end);
-      const show = w.length >= 3 ? `${w.slice(0, 1)}……${w.slice(-1)}` : `${w.slice(0, 1)}……`;
       nodes.push(
-        <span key={`m${i}`} className="mx-0.5 rounded bg-amber-100 px-1 font-mono text-primary-700 dark:bg-amber-900/30 dark:text-primary-300" title="点击取消挖空" onClick={() => setMarks(marks.filter((x) => !(x.start === m.start && x.end === m.end)))}>
-          {show}
+        <span key={`m${i}`} className="mx-0.5 rounded bg-amber-200 px-1 font-medium underline decoration-amber-500 decoration-wavy underline-offset-4 dark:bg-amber-900/40" title="点击取消这个挖空" onClick={() => setMarks(marks.filter((x) => !(x.start === m.start && x.end === m.end)))}>
+          {w}
         </span>
       );
       cursor = m.end;
@@ -141,8 +140,18 @@ function Inner() {
   return (
     <div className="space-y-5">
       {/* 步骤A：导入 */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold">A. 导入（可分多次，源文件不会被保存）</h2>
+      <section
+        className="rounded-2xl border border-slate-200 bg-white p-5 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+        tabIndex={0}
+        onPaste={(e) => {
+          const files = e.clipboardData?.files;
+          if (files && files.length > 0) {
+            e.preventDefault();
+            handleFiles(files);
+          }
+        }}
+      >
+        <h2 className="text-sm font-semibold">A. 导入（可分多次，源文件不会被保存；支持直接 Ctrl+V 粘贴图片或文本）</h2>
         <input ref={fileRef} type="file" multiple accept=".txt,.md,.pdf,.docx,image/*" onChange={(e) => handleFiles(e.target.files)} className="hidden" />
         <div className="mt-3 flex flex-wrap gap-2">
           <button onClick={() => fileRef.current?.click()} className="rounded-xl border-2 border-dashed border-slate-300 px-5 py-3 text-sm text-slate-500 hover:border-primary-400 hover:text-primary-600 dark:border-slate-600">
@@ -168,6 +177,37 @@ function Inner() {
             <button onClick={() => setMode("mark")} className={`rounded-lg px-3 py-1.5 text-xs ${mode === "mark" ? "bg-primary-600 text-white" : "border border-slate-200 dark:border-slate-600"}`}>划词模式</button>
           </div>
         </div>
+        {mode === "mark" ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <button
+              onClick={() => {
+                if (!marks.length) return;
+                const last = [...marks].sort((a, b) => b.start - a.start)[0];
+                setMarks(marks.filter((x) => !(x.start === last.start && x.end === last.end)));
+              }}
+              disabled={!marks.length}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:opacity-40 dark:border-slate-600"
+            >
+              ↩ 撤销上一个挖空
+            </button>
+            <button onClick={addMark} className="rounded-lg bg-primary-600 px-3 py-1.5 text-white">隐藏选中文字</button>
+            <span className="text-slate-400">选中文字后点这里；或点文中黄色高亮直接取消</span>
+          </div>
+        ) : null}
+        {mode === "mark" && marks.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {sortedMarks.map((m, i) => (
+              <button
+                key={i}
+                onClick={() => setMarks(marks.filter((x) => !(x.start === m.start && x.end === m.end)))}
+                title="点击取消这个挖空"
+                className="rounded-lg bg-amber-100 px-2 py-1 text-xs text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200"
+              >
+                {body.slice(m.start, m.end).slice(0, 24)}{m.end - m.start > 24 ? "…" : ""} ×
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {mode === "edit" ? (
           <p className="mt-2 text-xs text-slate-400">在上面输入框里改文字（改完挖空需重划），改好再切到划词模式。</p>

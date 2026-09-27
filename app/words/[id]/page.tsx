@@ -24,6 +24,9 @@ function Inner() {
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [fillMsg, setFillMsg] = useState("");
+  const [fillBusy, setFillBusy] = useState(false);
   const PER = 50;
 
   async function load() {
@@ -61,6 +64,55 @@ function Inner() {
     load();
   }
 
+  /** 批量删除勾选的词 */
+  async function removeChecked() {
+    if (!checked.size) return;
+    if (!confirm(`删除选中的 ${checked.size} 个单词？不可恢复`)) return;
+    await fetch(`/api/words?ids=${[...checked].join(",")}`, { method: "DELETE" });
+    setChecked(new Set());
+    load();
+  }
+
+  /** 补齐缺失释义：分批调 AI，进度可见，失败报原因 */
+  async function fillMissing() {
+    const need = (words ?? []).filter((w) => !w.meaning.trim());
+    if (!need.length) {
+      setFillMsg("所有词都有释义了，不需要补");
+      return;
+    }
+    setFillBusy(true);
+    let done = 0;
+    let fail = "";
+    for (let i = 0; i < need.length; i += 60) {
+      const batch = need.slice(i, i + 60);
+      setFillMsg(`AI 补释义 ${done}/${need.length}…`);
+      try {
+        const res = await fetch("/api/meanings", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ words: batch.map((w) => w.word) }),
+        });
+        const json = await res.json();
+        if (!json.ok) {
+          fail = json.error || "AI 请求失败";
+          break;
+        }
+        await fetch("/api/words", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ listId: id, meanings: json.items }),
+        });
+        done += batch.length;
+      } catch (e) {
+        fail = e instanceof Error ? e.message : "网络异常";
+        break;
+      }
+    }
+    setFillBusy(false);
+    setFillMsg(fail ? `失败：${fail}（请检查 Vercel 里的 GLM_API_KEY）` : `完成！已补 ${done} 个词的释义`);
+    load();
+  }
+
   if (adding) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-8">
@@ -87,9 +139,28 @@ function Inner() {
 
       <input value={filter} onChange={(e) => { setFilter(e.target.value); setPage(0); }} placeholder="搜索单词或释义…" className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
 
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+        <button onClick={fillMissing} disabled={fillBusy} className="rounded-lg bg-amber-500 px-3 py-1.5 font-medium text-white hover:bg-amber-600 disabled:opacity-50">
+          {fillBusy ? "补释义中…" : "⚡ AI 补齐缺失释义"}
+        </button>
+        {checked.size > 0 ? (
+          <button onClick={removeChecked} className="rounded-lg bg-red-600 px-3 py-1.5 font-medium text-white hover:bg-red-700">删除选中（{checked.size}）</button>
+        ) : null}
+        {fillMsg ? <span className={fillMsg.startsWith("失败") ? "text-red-500" : "text-slate-500"}>{fillMsg}</span> : null}
+      </div>
+
       <div className="mt-4 divide-y rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
         {pageItems.map((w) => (
           <div key={w.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+            <input
+              type="checkbox"
+              checked={checked.has(w.id)}
+              onChange={() => {
+                const next = new Set(checked);
+                checked.has(w.id) ? next.delete(w.id) : next.add(w.id);
+                setChecked(next);
+              }}
+            />
             <span className="w-44 shrink-0 font-medium">{w.word}</span>
             {editing === w.id ? (
               <>

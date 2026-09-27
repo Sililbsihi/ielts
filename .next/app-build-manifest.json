@@ -12,7 +12,7 @@
       "static/chunks/fd9d1056-3827b4ee963f968a.js",
       "static/chunks/117-81a140dcbdad3b75.js",
       "static/chunks/main-app-4479557f57c91736.js",
-      "static/css/30bb553406280f67.css",
+      "static/css/38c2de8e386e8c9c.css",
       "static/chunks/972-2adb499283b2862d.js",
       "static/chunks/app/layout-21a5b91396704fa3.js"
     ],
@@ -44,7 +44,7 @@
       "static/chunks/fd9d1056-3827b4ee963f968a.js",
       "static/chunks/117-81a140dcbdad3b75.js",
       "static/chunks/main-app-4479557f57c91736.js",
-      "static/chunks/app/passages/new/page-bdd18750800fe42d.js"
+      "static/chunks/app/passages/new/page-8db5bf21f5bb7ae7.js"
     ],
     "/passages/page": [
       "static/chunks/webpack-146869d058beb808.js",
@@ -60,8 +60,8 @@
       "static/chunks/117-81a140dcbdad3b75.js",
       "static/chunks/main-app-4479557f57c91736.js",
       "static/chunks/972-2adb499283b2862d.js",
-      "static/chunks/354-afc62068b5482bd2.js",
-      "static/chunks/app/words/[id]/page-4a1f1ffe5e8df07a.js"
+      "static/chunks/354-fc5e4452adf3c948.js",
+      "static/chunks/app/words/[id]/page-169112bf96e19b7d.js"
     ],
     "/words/[id]/recite/page": [
       "static/chunks/webpack-146869d058beb808.js",
@@ -76,7 +76,7 @@
       "static/chunks/fd9d1056-3827b4ee963f968a.js",
       "static/chunks/117-81a140dcbdad3b75.js",
       "static/chunks/main-app-4479557f57c91736.js",
-      "static/chunks/354-afc62068b5482bd2.js",
+      "static/chunks/354-fc5e4452adf3c948.js",
       "static/chunks/app/words/new/page-6842a5b0e8916e83.js"
     ],
     "/words/page": [
@@ -101,7 +101,7 @@
       "static/chunks/117-81a140dcbdad3b75.js",
       "static/chunks/main-app-4479557f57c91736.js",
       "static/chunks/972-2adb499283b2862d.js",
-      "static/chunks/app/writing/page-9da377c32cbab62b.js"
+      "static/chunks/app/writing/page-2f635d286a9f5eef.js"
     ],
     "/writing/practice/page": [
       "static/chunks/webpack-146869d058beb808.js",

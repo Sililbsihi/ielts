@@ -23,11 +23,21 @@ export default function WordImport({ appendListId, appendListName }: { appendLis
   const [picked, setPicked] = useState<Set<string>>(new Set()); // norm
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState("");
-  const [withMeaning, setWithMeaning] = useState(true); // 搜索/筛选只看已有释义？
+  const [withMeaning, setWithMeaning] = useState(false); // 默认展示全部词
   const [listName, setListName] = useState(appendListName ?? "");
   const [importMsg, setImportMsg] = useState("");
+  const [fillError, setFillError] = useState("");
   const [busy, setBusy] = useState(false);
   const PER = 100;
+
+  /** 剪贴板粘贴：图片走 OCR，文本进粘贴框 */
+  function handlePaste(e: React.ClipboardEvent) {
+    const items = e.clipboardData?.files;
+    if (items && items.length > 0) {
+      e.preventDefault();
+      handleFiles(items);
+    }
+  }
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -115,12 +125,60 @@ export default function WordImport({ appendListId, appendListName }: { appendLis
         if (!json.ok) throw new Error(json.error);
       }
 
-      // 批量补释义（跳过已有/库中已有释义的）
+      // 批量补释义（跳过已有释义的）；失败可见、可重试
       const needMeaning = items.filter((w) => !w.meaning).map((w) => w.word);
       let done = 0;
+      let failed = 0;
       for (let i = 0; i < needMeaning.length; i += 60) {
         const batch = needMeaning.slice(i, i + 60);
         setImportMsg(`AI 配释义 ${done}/${needMeaning.length}…（可放心等待，进度不会丢）`);
+        try {
+          const res = await fetch("/api/meanings", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ words: batch }),
+          });
+          const json = await res.json();
+          if (json.ok) {
+            await fetch("/api/words", {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ listId, meanings: json.items }),
+            });
+          } else {
+            failed += batch.length;
+            setFillError(json.error || "AI 释义请求失败");
+          }
+        } catch {
+          failed += batch.length;
+          setFillError("网络异常，部分释义未完成");
+        }
+        done += batch.length;
+      }
+      setImportMsg(failed > 0 ? `入库完成，但 ${failed} 个词的 AI 释义失败：${fillError || "请检查 GLM_API_KEY"}` : "全部完成！");
+      if (failed > 0) {
+        setBusy(false);
+        return; // 留在原地，可重试或先进词表
+      }
+      router.push(`/words/${listId}`);
+    } catch (e) {
+      alert("导入出错：" + (e instanceof Error ? e.message : String(e)) + "\n已入库的部分不会丢，重试会自动跳过重复词。");
+      setBusy(false);
+    }
+  }
+
+  /** 重试补释义（仅列表中缺失的） */
+  async function retryFill() {
+    if (!listName.trim() && !appendListId) return;
+    setBusy(true);
+    setFillError("");
+    try {
+      const listId = await ensureListId();
+      const need = parsed.filter((w) => picked.has(normWord(w.word)) && !w.meaning).map((w) => w.word);
+      let done = 0;
+      for (let i = 0; i < need.length; i += 60) {
+        const batch = need.slice(i, i + 60);
+        setImportMsg(`重试 AI 配释义 ${done}/${need.length}…`);
         const res = await fetch("/api/meanings", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -133,12 +191,13 @@ export default function WordImport({ appendListId, appendListName }: { appendLis
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ listId, meanings: json.items }),
           });
+        } else {
+          setFillError(json.error || "仍失败，请检查 GLM_API_KEY");
         }
         done += batch.length;
       }
-      router.push(`/words/${listId}`);
-    } catch (e) {
-      alert("导入出错：" + (e instanceof Error ? e.message : String(e)) + "\n已入库的部分不会丢，重试会自动跳过重复词。");
+      if (!fillError) router.push(`/words/${listId}`);
+    } finally {
       setBusy(false);
     }
   }
@@ -178,10 +237,12 @@ export default function WordImport({ appendListId, appendListName }: { appendLis
               handleFiles(e.dataTransfer.files);
             }}
             onDragOver={(e) => e.preventDefault()}
+            onPaste={handlePaste}
             onClick={() => fileRef.current?.click()}
+            tabIndex={0}
             className="cursor-pointer rounded-xl border-2 border-dashed border-slate-300 py-10 text-center text-sm text-slate-400 hover:border-primary-400 dark:border-slate-600"
           >
-            {busyMsg || "点击选择 / 拖入文件：txt · md · docx · pdf · 图片(png/jpg)"}
+            {busyMsg || "点击选择 / 拖入文件 / 直接 Ctrl+V 粘贴图片或文本：txt · md · docx · pdf · 图片(png/jpg)"}
             <input ref={fileRef} type="file" multiple hidden accept=".txt,.md,.docx,.pdf,image/*" onChange={(e) => handleFiles(e.target.files)} />
           </div>
           <textarea
@@ -212,6 +273,11 @@ export default function WordImport({ appendListId, appendListName }: { appendLis
             <button onClick={() => setPicked(new Set(filtered.map((w) => normWord(w.word))))} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs dark:border-slate-600">全选本筛选</button>
             <button onClick={() => setPicked(new Set())} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs dark:border-slate-600">清空</button>
           </div>
+          {filtered.length === 0 ? (
+            <p className="rounded-xl bg-amber-50 px-4 py-6 text-center text-xs text-amber-600 dark:bg-amber-950/30 dark:text-amber-300">
+              没有可显示的词{withMeaning ? "——当前开着「只看自带释义」，这批词都没带释义，请点一下该按钮关闭" : ""}
+            </p>
+          ) : (
           <div className="max-h-[50vh] divide-y overflow-y-auto rounded-xl border border-slate-100 dark:border-slate-700">
             {pageItems.map((w) => {
               const key = normWord(w.word);
@@ -230,6 +296,7 @@ export default function WordImport({ appendListId, appendListName }: { appendLis
               );
             })}
           </div>
+          )}
           <div className="flex items-center justify-between text-xs text-slate-500">
             <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="rounded-lg border border-slate-200 px-3 py-1 disabled:opacity-40 dark:border-slate-600">上一页</button>
             <span>{page + 1} / {Math.max(1, Math.ceil(filtered.length / PER))}</span>
@@ -250,7 +317,16 @@ export default function WordImport({ appendListId, appendListName }: { appendLis
           </label>
           <p className="text-xs text-slate-400">将导入 {pickedCount} 个词 · 重名自动去重 · 没有释义的词由 AI 自动补两个意思</p>
           {busy ? (
-            <div className="rounded-xl bg-primary-50 p-4 text-sm text-primary-700 dark:bg-primary-900/20 dark:text-primary-300">{importMsg}</div>
+            <div className="space-y-2 rounded-xl bg-primary-50 p-4 text-sm text-primary-700 dark:bg-primary-900/20 dark:text-primary-300">
+              <p>{importMsg}</p>
+              {fillError ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/40 dark:text-red-300">
+                  <span>⚠ {fillError}</span>
+                  <button onClick={retryFill} className="rounded-lg bg-red-600 px-3 py-1 text-white">重试补释义</button>
+                  <button onClick={() => ensureListId().then((id) => router.push(`/words/${id}`))} className="rounded-lg border border-red-300 px-3 py-1">跳过，先进词表</button>
+                </div>
+              ) : null}
+            </div>
           ) : (
             <div className="flex gap-2">
               <button onClick={() => setStep(2)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm dark:border-slate-600">上一步</button>

@@ -86,9 +86,14 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const id = req.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({ ok: false, error: "参数缺失" }, { status: 400 });
-  const { error } = await getDb().from("wl_words").delete().eq("id", id);
+  const sp = req.nextUrl.searchParams;
+  const ids = sp.get("ids");
+  const id = sp.get("id");
+  if (!id && !ids) return NextResponse.json({ ok: false, error: "参数缺失" }, { status: 400 });
+  const query = getDb().from("wl_words").delete();
+  const { error } = ids
+    ? await query.in("id", ids.split(",").map((s) => s.trim()).filter(Boolean))
+    : await query.eq("id", id);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

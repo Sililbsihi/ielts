@@ -18,6 +18,8 @@ export default function WritingPage() {
   const [prompts, setPrompts] = useState<Prompt[] | null>(null);
   const [essays, setEssays] = useState<EssayRow[]>([]);
   const [extracted, setExtracted] = useState("");
+  const [rawSource, setRawSource] = useState("");
+  const [organized, setOrganized] = useState<{ content: string; kind: string }[]>([]);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [manual, setManual] = useState("");
@@ -40,16 +42,34 @@ export default function WritingPage() {
     setErr("");
     try {
       const text = await extractTextFromFile(file);
-      // 启发式切题：按 "Writing Task x" 或 行首编号 切分
-      const parts = text
-        .split(/(?=(?:^|\n)\s*(?:Writing Task\s*\d|(?:\d{1,3})[.、]))/i)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 40);
-      setExtracted(parts.length ? parts.join("\n=====\n") : text);
-      setBusy("");
+      setRawSource(text);
+      setExtracted(text);
+      setBusy("抽取完成，点击「AI 智能拆题」自动整理");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "抽取失败");
       setBusy("");
+    }
+  }
+
+  /** AI 智能拆题：把一团乱麻的原始文本整理成独立题目 */
+  async function aiOrganize() {
+    if (!rawSource.trim()) return setErr("先上传 PDF/文本");
+    setBusy("AI 拆题中（长文档约需 20-40 秒）…");
+    setErr("");
+    try {
+      const res = await fetch("/api/prompts/organize", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: rawSource }),
+      });
+      const json = await res.json();
+      setBusy("");
+      if (!json.ok) return setErr(json.error || "AI 拆题失败");
+      setOrganized(json.items);
+      setExtracted(json.items.map((i: { content: string }) => i.content).join("\n=====\n"));
+    } catch (e) {
+      setBusy("");
+      setErr(e instanceof Error ? e.message : "AI 拆题失败");
     }
   }
 
@@ -110,6 +130,10 @@ export default function WritingPage() {
           <input ref={fileRef} type="file" accept=".pdf,.txt,.md,.docx" className="hidden" onChange={(e) => e.target.files?.[0] && handlePdf(e.target.files[0])} />
           <div className="flex flex-wrap gap-2">
             <button onClick={() => fileRef.current?.click()} className="rounded-xl border-2 border-dashed border-slate-300 px-5 py-3 text-sm text-slate-500 hover:border-primary-400 dark:border-slate-600">📎 上传历年题目 PDF/TXT（抽取文字，不保存源文件）</button>
+            {extracted ? (
+              <button onClick={aiOrganize} className="rounded-xl bg-primary-600 px-5 py-3 text-sm font-medium text-white hover:bg-primary-700">✨ AI 智能拆题（把乱文本整理成独立题目）</button>
+            ) : null}
+            {organized.length ? <span className="self-center text-xs text-emerald-600">AI 拆出 {organized.length} 道，检查下方文本后保存</span> : null}
             {busy ? <span className="self-center text-xs text-primary-600">{busy}</span> : null}
           </div>
 
