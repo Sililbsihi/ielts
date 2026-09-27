@@ -24,6 +24,30 @@ export default function WritingPage() {
   const [err, setErr] = useState("");
   const [manual, setManual] = useState("");
   const [tab, setTab] = useState<"library" | "essays">("library");
+  const [resumeInfo, setResumeInfo] = useState<{ done: number; total: number } | null>(null);
+
+  // ---- 拆题任务持久化（localStorage）：切页面/刷新不丢，可断点续跑 ----
+  const LS_KEY = "wr_organize_job_v1";
+
+  interface JobState {
+    rawSource: string;
+    results: ({ content: string; kind: string } | null)[];
+    extracted: string;
+    organized: { content: string; kind: string }[];
+    ts: number;
+  }
+  const saveJob = (s: JobState) => {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(s));
+    } catch {}
+  };
+  const readJob = (): JobState | null => {
+    try {
+      return JSON.parse(localStorage.getItem(LS_KEY) || "null");
+    } catch {
+      return null;
+    }
+  };
 
   async function load() {
     const [pr, es] = await Promise.all([fetch("/api/prompts"), fetch("/api/essays")]);
@@ -33,8 +57,21 @@ export default function WritingPage() {
     else setErr(pj.error);
     if (ej.ok) setEssays(ej.essays);
   }
+
   useEffect(() => {
     load();
+    // 恢复上次任务：原文 + 已拆结果 + 未完成进度
+    const j = readJob();
+    if (j?.rawSource) {
+      setRawSource(j.rawSource);
+      setExtracted(j.extracted || "");
+      setOrganized(j.organized || []);
+      const done = j.results.filter(Boolean).length;
+      if (j.results.length && done < j.results.length) {
+        setResumeInfo({ done, total: j.results.length });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handlePdf(file: File) {
@@ -44,6 +81,9 @@ export default function WritingPage() {
       const text = await extractTextFromFile(file);
       setRawSource(text);
       setExtracted(text);
+      setOrganized([]);
+      setResumeInfo(null);
+      saveJob({ rawSource: text, results: [], extracted: "", organized: [], ts: Date.now() });
       setBusy("抽取完成，点击「AI 智能拆题」自动整理");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "抽取失败");
@@ -70,6 +110,24 @@ export default function WritingPage() {
     if (cur.trim()) chunks.push(cur);
 
     const results: ({ content: string; kind: string } | null)[] = new Array(chunks.length).fill(null);
+    // 断点续跑：若 localStorage 里有同一篇原文的旧进度，继承已完成的块
+    const prev = readJob();
+    if (prev?.rawSource === rawSource && Array.isArray(prev.results) && prev.results.length === chunks.length) {
+      for (let i = 0; i < chunks.length; i++) if (prev.results[i]) results[i] = prev.results[i];
+    }
+    const persist = () => {
+      const organizedNow = results.filter(Boolean) as { content: string; kind: string }[];
+      const seenNow = new Set<string>();
+      const dedup = organizedNow.filter((it) => {
+        const k = it.content.slice(0, 80).toLowerCase();
+        if (seenNow.has(k)) return false;
+        seenNow.add(k);
+        return true;
+      });
+      saveJob({ rawSource, results, extracted: dedup.map((i) => i.content).join("\n=====\n"), organized: dedup, ts: Date.now() });
+    };
+    const preDone = results.filter(Boolean).length;
+    if (preDone) setBusy(`继承上次进度 ${preDone}/${chunks.length}，继续拆…`);
 
     async function workOne(i: number): Promise<boolean> {
       try {
@@ -89,13 +147,15 @@ export default function WritingPage() {
       }
     }
 
-    let done = 0;
+    let done = preDone;
+    const remaining = chunks.map((_, i) => i).filter((i) => !results[i]);
     let ptr = 0;
     async function worker() {
-      while (ptr < chunks.length) {
-        const i = ptr++;
-        await workOne(i);
+      while (ptr < remaining.length) {
+        const idx = ptr++;
+        await workOne(remaining[idx]);
         done++;
+        persist(); // 每块完成即落盘，随时可断点续跑
         setBusy(`AI 拆题中：${done}/${chunks.length} 块…`);
       }
     }
@@ -106,6 +166,7 @@ export default function WritingPage() {
     for (let k = 0; k < failedFirst.length; k++) {
       setBusy(`AI 拆题中：重试失败块 ${k + 1}/${failedFirst.length}…`);
       await workOne(failedFirst[k]);
+      persist();
     }
 
     const all: { content: string; kind: string }[] = [];
@@ -122,9 +183,11 @@ export default function WritingPage() {
 
     const failedCount = results.filter((r) => !r).length;
     setBusy("");
+    setResumeInfo(null);
     if (!all.length) return setErr("AI 没拆出题目，请重试");
     setOrganized(all);
     setExtracted(all.map((i) => i.content).join("\n=====\n"));
+    persist();
     if (failedCount) setErr(`提示：有 ${failedCount} 块重试后仍失败（对应题目可能缺失），其余已拆出 ${all.length} 道`);
   }
 
@@ -189,6 +252,24 @@ export default function WritingPage() {
               <button onClick={aiOrganize} className="rounded-xl bg-primary-600 px-5 py-3 text-sm font-medium text-white hover:bg-primary-700">✨ AI 智能拆题（把乱文本整理成独立题目）</button>
             ) : null}
             {organized.length ? <span className="self-center text-xs text-emerald-600">AI 拆出 {organized.length} 道，检查下方文本后保存</span> : null}
+            {resumeInfo ? (
+              <div className="flex w-full flex-wrap items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                <span>检测到上次未完成的拆题任务：{resumeInfo.done}/{resumeInfo.total} 块已完成（切页面/刷新都不丢）</span>
+                <button onClick={aiOrganize} className="rounded-lg bg-amber-500 px-3 py-1 font-medium text-white">继续拆题（从断点开始）</button>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem(LS_KEY);
+                    setResumeInfo(null);
+                    setRawSource("");
+                    setExtracted("");
+                    setOrganized([]);
+                  }}
+                  className="rounded-lg border border-amber-300 px-3 py-1"
+                >
+                  丢弃任务
+                </button>
+              </div>
+            ) : null}
             {busy ? <span className="self-center text-xs text-primary-600">{busy}</span> : null}
           </div>
 
