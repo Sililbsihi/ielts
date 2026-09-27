@@ -52,7 +52,7 @@
       "static/chunks/117-81a140dcbdad3b75.js",
       "static/chunks/main-app-4479557f57c91736.js",
       "static/chunks/972-2adb499283b2862d.js",
-      "static/chunks/app/passages/page-83a2b10bc12a68a1.js"
+      "static/chunks/app/passages/page-fe7c0f48c22e9d17.js"
     ],
     "/words/[id]/page": [
       "static/chunks/webpack-146869d058beb808.js",
@@ -60,7 +60,7 @@
       "static/chunks/117-81a140dcbdad3b75.js",
       "static/chunks/main-app-4479557f57c91736.js",
       "static/chunks/972-2adb499283b2862d.js",
-      "static/chunks/354-fc5e4452adf3c948.js",
+      "static/chunks/354-8a1b75c113765f18.js",
       "static/chunks/app/words/[id]/page-169112bf96e19b7d.js"
     ],
     "/words/[id]/recite/page": [
@@ -76,7 +76,7 @@
       "static/chunks/fd9d1056-3827b4ee963f968a.js",
       "static/chunks/117-81a140dcbdad3b75.js",
       "static/chunks/main-app-4479557f57c91736.js",
-      "static/chunks/354-fc5e4452adf3c948.js",
+      "static/chunks/354-8a1b75c113765f18.js",
       "static/chunks/app/words/new/page-6842a5b0e8916e83.js"
     ],
     "/words/page": [

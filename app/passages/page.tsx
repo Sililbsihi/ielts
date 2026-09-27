@@ -16,10 +16,18 @@ export default function PassagesPage() {
   const [err, setErr] = useState("");
 
   async function load() {
-    const res = await fetch("/api/passages");
-    const json = await res.json();
-    if (json.ok) setRows(json.list);
-    else setErr(json.error || "加载失败");
+    try {
+      const res = await fetch("/api/passages");
+      const json = await res.json();
+      if (json.ok && Array.isArray(json.list)) setRows(json.list);
+      else {
+        setRows([]);
+        setErr(json.error || "返回数据异常");
+      }
+    } catch (e) {
+      setRows([]);
+      setErr(e instanceof Error ? e.message : "网络异常");
+    }
   }
   useEffect(() => {
     load();

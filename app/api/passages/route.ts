@@ -19,10 +19,10 @@ export async function GET(req: NextRequest) {
     id: p.id,
     title: p.title,
     created_at: p.created_at,
-    length: p.body.length,
-    hiddenCount: Array.isArray(p.marks) ? p.marks.length : 0,
+    words: (p.body.match(/\S+/g) ?? []).length,
+    markCount: Array.isArray(p.marks) ? p.marks.length : 0,
   }));
-  return NextResponse.json({ ok: true, passages: list });
+  return NextResponse.json({ ok: true, list });
 }
 
 export async function POST(req: NextRequest) {

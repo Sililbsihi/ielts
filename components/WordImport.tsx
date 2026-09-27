@@ -155,7 +155,7 @@ export default function WordImport({ appendListId, appendListName }: { appendLis
         }
         done += batch.length;
       }
-      setImportMsg(failed > 0 ? `入库完成，但 ${failed} 个词的 AI 释义失败：${fillError || "请检查 GLM_API_KEY"}` : "全部完成！");
+      setImportMsg(failed > 0 ? `✅ 单词已全部入库成功！只是 ${failed} 个词的 AI 释义没配上。点下方按钮处理，或直接进词表。` : "全部完成！");
       if (failed > 0) {
         setBusy(false);
         return; // 留在原地，可重试或先进词表
