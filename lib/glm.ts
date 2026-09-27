@@ -9,11 +9,11 @@ export function glmConfigured(): boolean {
   return Boolean(process.env.GLM_API_KEY);
 }
 
-export async function glmChat(messages: { role: string; content: string }[], temperature = 0.3): Promise<string> {
+export async function glmChat(messages: { role: string; content: string }[], temperature = 0.3, timeoutMs = 50000): Promise<string> {
   const key = process.env.GLM_API_KEY;
   if (!key) throw new Error("缺少 GLM_API_KEY");
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 55000);
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",

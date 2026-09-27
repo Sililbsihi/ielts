@@ -20,8 +20,8 @@
   "/api/passages/route": "app/api/passages/route.js",
   "/api/prompts/organize/route": "app/api/prompts/organize/route.js",
   "/api/prompts/route": "app/api/prompts/route.js",
-  "/api/writing/grade/route": "app/api/writing/grade/route.js",
   "/api/words/route": "app/api/words/route.js",
+  "/api/writing/grade/route": "app/api/writing/grade/route.js",
   "/api/writing/score/route": "app/api/writing/score/route.js",
   "/page": "app/page.js"
 }

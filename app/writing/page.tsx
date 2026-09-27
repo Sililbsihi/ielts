@@ -51,22 +51,49 @@ export default function WritingPage() {
     }
   }
 
-  /** AI 智能拆题：把一团乱麻的原始文本整理成独立题目 */
+  /** AI 智能拆题：长文分块循环喂给 AI，合并结果（带进度，可看清哪块失败） */
   async function aiOrganize() {
     if (!rawSource.trim()) return setErr("先上传 PDF/文本");
-    setBusy("AI 拆题中（长文档约需 20-40 秒）…");
     setErr("");
+    // 按段落边界切成 ≤7000 字的块
+    const paras = rawSource.split(/\n+/);
+    const chunks: string[] = [];
+    let cur = "";
+    for (const p of paras) {
+      if ((cur + "\n" + p).length > 7000 && cur) {
+        chunks.push(cur);
+        cur = p;
+      } else cur = cur ? cur + "\n" + p : p;
+    }
+    if (cur.trim()) chunks.push(cur);
+
+    const all: { content: string; kind: string }[] = [];
+    const seen = new Set<string>();
     try {
-      const res = await fetch("/api/prompts/organize", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: rawSource }),
-      });
-      const json = await res.json();
+      for (let i = 0; i < chunks.length; i++) {
+        setBusy(`AI 拆题中：第 ${i + 1}/${chunks.length} 块…（每块约 15-30 秒）`);
+        const res = await fetch("/api/prompts/organize", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ text: chunks[i] }),
+        });
+        const json = await res.json();
+        if (!json.ok) {
+          setBusy("");
+          return setErr(`第 ${i + 1} 块失败：${json.error}（前面的块已拆好，重试会从头跑，已拆内容不丢）`);
+        }
+        for (const it of json.items as { content: string; kind: string }[]) {
+          const key = it.content.slice(0, 80).toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            all.push(it);
+          }
+        }
+      }
       setBusy("");
-      if (!json.ok) return setErr(json.error || "AI 拆题失败");
-      setOrganized(json.items);
-      setExtracted(json.items.map((i: { content: string }) => i.content).join("\n=====\n"));
+      if (!all.length) return setErr("AI 没拆出题目，请重试");
+      setOrganized(all);
+      setExtracted(all.map((i) => i.content).join("\n=====\n"));
     } catch (e) {
       setBusy("");
       setErr(e instanceof Error ? e.message : "AI 拆题失败");
