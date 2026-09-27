@@ -1,0 +1,15 @@
+{
+  "lib/wordparse.ts -> pdfjs-dist": {
+    "id": 7781,
+    "files": [
+      "static/chunks/9b0008ae.f82d4987a7d5f5d4.js",
+      "static/chunks/609.7a1f59bc54b46d08.js"
+    ]
+  },
+  "lib/wordparse.ts -> tesseract.js": {
+    "id": 9960,
+    "files": [
+      "static/chunks/960.b571d1bc0af3151c.js"
+    ]
+  }
+}
