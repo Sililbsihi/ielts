@@ -51,53 +51,81 @@ export default function WritingPage() {
     }
   }
 
-  /** AI 智能拆题：长文分块循环喂给 AI，合并结果（带进度，可看清哪块失败） */
+  /** AI 智能拆题：细粒度分块（~500字）+ 2路并发 + 失败自动重试一次 */
   async function aiOrganize() {
     if (!rawSource.trim()) return setErr("先上传 PDF/文本");
     setErr("");
-    // 按段落边界切成 ≤7000 字的块
-    const paras = rawSource.split(/\n+/);
+    // 切成 ≤500 字小块（段落边界优先，超长段落硬切，带 80 字重叠防题目截断）
+    const CHUNK = 500;
     const chunks: string[] = [];
     let cur = "";
-    for (const p of paras) {
-      if ((cur + "\n" + p).length > 3000 && cur) {
-        chunks.push(cur);
-        cur = p;
-      } else cur = cur ? cur + "\n" + p : p;
+    for (const p of rawSource.split(/\n+/)) {
+      for (const piece of p.match(/[\s\S]{1,500}/g) ?? [p]) {
+        if ((cur + " " + piece).length > CHUNK && cur) {
+          chunks.push(cur);
+          cur = cur.slice(-80) + " " + piece;
+        } else cur = cur ? cur + " " + piece : piece;
+      }
     }
     if (cur.trim()) chunks.push(cur);
 
-    const all: { content: string; kind: string }[] = [];
-    const seen = new Set<string>();
-    try {
-      for (let i = 0; i < chunks.length; i++) {
-        setBusy(`AI 拆题中：第 ${i + 1}/${chunks.length} 块…（每块约 15-30 秒）`);
+    const results: ({ content: string; kind: string } | null)[] = new Array(chunks.length).fill(null);
+
+    async function workOne(i: number): Promise<boolean> {
+      try {
         const res = await fetch("/api/prompts/organize", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ text: chunks[i] }),
         });
         const json = await res.json();
-        if (!json.ok) {
-          setBusy("");
-          return setErr(`第 ${i + 1} 块失败：${json.error}（前面的块已拆好，重试会从头跑，已拆内容不丢）`);
+        if (json.ok && Array.isArray(json.items)) {
+          results[i] = json.items;
+          return true;
         }
-        for (const it of json.items as { content: string; kind: string }[]) {
-          const key = it.content.slice(0, 80).toLowerCase();
-          if (!seen.has(key)) {
-            seen.add(key);
-            all.push(it);
-          }
+        return false;
+      } catch {
+        return false;
+      }
+    }
+
+    let done = 0;
+    let ptr = 0;
+    async function worker() {
+      while (ptr < chunks.length) {
+        const i = ptr++;
+        await workOne(i);
+        done++;
+        setBusy(`AI 拆题中：${done}/${chunks.length} 块…`);
+      }
+    }
+    await Promise.all([worker(), worker()]); // 2 路并发
+
+    // 失败块自动重试一次（串行）
+    const failedFirst = results.map((r, i) => (r ? -1 : i)).filter((i) => i >= 0);
+    for (let k = 0; k < failedFirst.length; k++) {
+      setBusy(`AI 拆题中：重试失败块 ${k + 1}/${failedFirst.length}…`);
+      await workOne(failedFirst[k]);
+    }
+
+    const all: { content: string; kind: string }[] = [];
+    const seen = new Set<string>();
+    results.forEach((items) => {
+      for (const it of (items ?? []) as { content: string; kind: string }[]) {
+        const key = it.content.slice(0, 80).toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          all.push(it);
         }
       }
-      setBusy("");
-      if (!all.length) return setErr("AI 没拆出题目，请重试");
-      setOrganized(all);
-      setExtracted(all.map((i) => i.content).join("\n=====\n"));
-    } catch (e) {
-      setBusy("");
-      setErr(e instanceof Error ? e.message : "AI 拆题失败");
-    }
+    });
+
+    const failedCount = results.filter((r) => !r).length;
+    setBusy("");
+    if (!all.length) return setErr("AI 没拆出题目，请重试");
+    setOrganized(all);
+    setExtracted(all.map((i) => i.content).join("\n=====\n"));
+    if (failedCount) setErr(`提示：有 ${failedCount} 块重试后仍失败（对应题目可能缺失），其余已拆出 ${all.length} 道`);
   }
 
   async function saveExtracted() {
