@@ -12,12 +12,25 @@ export async function GET(req: NextRequest) {
   const listId = req.nextUrl.searchParams.get("listId");
   if (!listId) return NextResponse.json({ ok: false, error: "缺少 listId" }, { status: 400 });
   if (!isDbConfigured()) return NextResponse.json({ ok: false, error: "未配置数据库" }, { status: 500 });
-  const { data, error } = await getDb()
+  let degraded = false;
+  let { data, error } = await getDb()
     .from("wl_words")
-    .select("id,word,norm,meaning,is_phrase,pos,err_count")
+    .select("id,word,norm,meaning,is_phrase,pos,err_count,starred,recited")
     .eq("list_id", listId)
     .order("pos", { ascending: true })
     .limit(20000);
+  if (error) {
+    // 数据库还没加 starred/recited 列 → 降级：不带新列查询，前端用本地存储兜底
+    const retry = await getDb()
+      .from("wl_words")
+      .select("id,word,norm,meaning,is_phrase,pos,err_count")
+      .eq("list_id", listId)
+      .order("pos", { ascending: true })
+      .limit(20000);
+    data = retry.data as typeof data;
+    error = retry.error;
+    degraded = !retry.error;
+  }
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, words: data ?? [] });
 }
@@ -63,7 +76,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, word, meaning, err_delta } = await req.json();
+  const { id, word, meaning, err_delta, starred, recited } = await req.json();
   if (!id) return NextResponse.json({ ok: false, error: "参数缺失" }, { status: 400 });
   if (err_delta) {
     // 累计错误 +1（单用户场景，先读后写足够）
@@ -79,9 +92,18 @@ export async function PATCH(req: NextRequest) {
     patch.is_phrase = /\s/.test(patch.word as string);
   }
   if (typeof meaning === "string") patch.meaning = meaning.slice(0, 200);
+  if (typeof starred === "boolean") patch.starred = starred;
+  if (typeof recited === "boolean") patch.recited = recited;
   if (!Object.keys(patch).length) return NextResponse.json({ ok: false, error: "无可更新字段" }, { status: 400 });
   const { error } = await getDb().from("wl_words").update(patch).eq("id", id);
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) {
+    const msg = error.message || "";
+    if (/column|schema/i.test(msg)) {
+      // 列未建：返回降级标记，前端写本地存储
+      return NextResponse.json({ ok: true, degraded: true });
+    }
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }
 

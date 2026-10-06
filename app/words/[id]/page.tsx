@@ -12,6 +12,8 @@ interface W {
   meaning: string;
   is_phrase: boolean;
   err_count: number;
+  starred?: boolean | null;
+  recited?: boolean | null;
 }
 
 function Inner() {
@@ -27,12 +29,42 @@ function Inner() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [fillMsg, setFillMsg] = useState("");
   const [fillBusy, setFillBusy] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "unrecited" | "recited" | "starred">("all");
   const PER = 50;
+
+  /** 降级模式：浏览器本地读已背/难词 */
+  function readLocal(key: string): Record<string, boolean> {
+    try { return JSON.parse(localStorage.getItem(`${key}:${id}`) || "{}"); } catch { return {}; }
+  }
+  function writeLocal(key: string, map: Record<string, boolean>) {
+    try { localStorage.setItem(`${key}:${id}`, JSON.stringify(map)); } catch { /* 忽略 */ }
+  }
 
   async function load() {
     const res = await fetch(`/api/words?listId=${id}`);
     const json = await res.json();
-    if (json.ok) setWords(json.words);
+    if (!json.ok) return;
+    if (json.degraded) {
+      const rec = readLocal("wrec"), star = readLocal("wstar");
+      setWords((json.words as W[]).map((w) => ({ ...w, recited: !!rec[w.id], starred: !!star[w.id] })));
+    } else setWords(json.words);
+  }
+
+  /** 标/取消难词：先写库；库缺列则写本地，界面即时反馈 */
+  async function toggleStar(w: W) {
+    const next = !w.starred;
+    setWords((ws) => (ws ?? []).map((x) => (x.id === w.id ? { ...x, starred: next } : x)));
+    const r = await fetch("/api/words", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: w.id, starred: next }),
+    });
+    const j = await r.json();
+    if (!j.ok || j.degraded) {
+      const map = readLocal("wstar");
+      if (next) map[w.id] = true; else delete map[w.id];
+      writeLocal("wstar", map);
+    }
   }
   useEffect(() => {
     if (!adding) load();
@@ -44,8 +76,18 @@ function Inner() {
 
   const filtered = useMemo(() => {
     const f = filter.trim().toLowerCase();
-    return (words ?? []).filter((w) => !f || w.word.toLowerCase().includes(f) || w.meaning.toLowerCase().includes(f));
-  }, [words, filter]);
+    return (words ?? []).filter((w) => {
+      if (f && !w.word.toLowerCase().includes(f) && !w.meaning.toLowerCase().includes(f)) return false;
+      if (statusFilter === "unrecited") return !w.recited;
+      if (statusFilter === "recited") return !!w.recited;
+      if (statusFilter === "starred") return !!w.starred;
+      return true;
+    });
+  }, [words, filter, statusFilter]);
+  const stats = useMemo(() => {
+    const ws = words ?? [];
+    return { total: ws.length, recited: ws.filter((w) => w.recited).length, starred: ws.filter((w) => w.starred).length };
+  }, [words]);
   const pageItems = filtered.slice(page * PER, page * PER + PER);
 
   async function saveMeaning(w: W) {
@@ -138,6 +180,12 @@ function Inner() {
       </div>
 
       <input value={filter} onChange={(e) => { setFilter(e.target.value); setPage(0); }} placeholder="搜索单词或释义…" className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="mr-1 text-slate-400">共 {stats.total} 词 · 已背 {stats.recited} · 未背 {stats.total - stats.recited} · 难词 {stats.starred}</span>
+        {([["all", "全部"], ["unrecited", "未背"], ["recited", "已背"], ["starred", "⭐难词"]] as const).map(([k, label]) => (
+          <button key={k} onClick={() => { setStatusFilter(k); setPage(0); }} className={`rounded-full px-2.5 py-1 ${statusFilter === k ? "bg-primary-600 font-medium text-white" : "border border-slate-200 text-slate-500 dark:border-slate-600"}`}>{label}</button>
+        ))}
+      </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
         <button onClick={fillMissing} disabled={fillBusy} className="rounded-lg bg-amber-500 px-3 py-1.5 font-medium text-white hover:bg-amber-600 disabled:opacity-50">
@@ -151,7 +199,7 @@ function Inner() {
 
       <div className="mt-4 divide-y rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
         {pageItems.map((w) => (
-          <div key={w.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+          <div key={w.id} className={`flex items-center gap-3 px-4 py-2.5 text-sm ${w.starred ? "border-l-4 border-amber-400 bg-amber-50/60 dark:bg-amber-500/10" : ""}`}>
             <input
               type="checkbox"
               checked={checked.has(w.id)}
@@ -161,7 +209,12 @@ function Inner() {
                 setChecked(next);
               }}
             />
-            <span className="w-44 shrink-0 font-medium">{w.word}</span>
+            <span className="w-44 shrink-0 font-medium">{w.starred ? "⭐" : ""}{w.word}</span>
+            {w.recited ? (
+              <span className="shrink-0 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">已背</span>
+            ) : (
+              <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400 dark:bg-slate-700">未背</span>
+            )}
             {editing === w.id ? (
               <>
                 <input value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus className="flex-1 rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
@@ -172,6 +225,7 @@ function Inner() {
               <>
                 <span className="flex-1 truncate text-xs text-slate-500 dark:text-slate-400">{w.meaning || "（无释义，点笔补）"}</span>
                 {w.err_count > 0 ? <span className="text-xs text-amber-500">错{w.err_count}</span> : null}
+                <button onClick={() => toggleStar(w)} title="标记难词" className={`text-sm ${w.starred ? "text-amber-500" : "text-slate-300 hover:text-amber-500"}`}>⭐</button>
                 <button onClick={() => { setEditing(w.id); setDraft(w.meaning); }} className="text-xs text-slate-400 hover:text-primary-600">✎</button>
                 <button onClick={() => removeWord(w.id)} className="text-xs text-red-300 hover:text-red-500">删</button>
               </>
