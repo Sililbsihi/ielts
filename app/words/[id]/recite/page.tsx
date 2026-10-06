@@ -33,6 +33,8 @@ export default function RecitePage() {
   const [errIds, setErrIds] = useState<Set<string>>(new Set());
   const [finished, setFinished] = useState(false);
   const [onlyWrong, setOnlyWrong] = useState(false);
+  // 音标缓存：word -> 美式 IPA（不含斜杠）；localStorage 持久
+  const [ph, setPh] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch(`/api/words?listId=${id}`)
@@ -47,6 +49,36 @@ export default function RecitePage() {
   const list = useMemo(() => (words ?? []).filter((w) => (!onlyWrong || errIds.has(w.id))), [words, onlyWrong, errIds]);
   const cur = list?.[idx];
   const need = cur ? requiredReps(cur) : 0;
+
+  useEffect(() => {
+    if (!cur?.word) return;
+    const key = cur.word.trim().toLowerCase();
+    if (ph[key]) return;
+    try {
+      const cached = window.localStorage.getItem(`ph:${key}`);
+      if (cached) { setPh((m) => (m[key] ? m : { ...m, [key]: cached })); return; }
+      if (window.localStorage.getItem(`phmiss:${key}`)) return;
+    } catch { /* localStorage 不可用则直接查 */ }
+    let dead = false;
+    void (async () => {
+      try {
+        const r = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(key)}`);
+        if (!r.ok) throw new Error("miss");
+        const j = await r.json();
+        const raw: string = j?.[0]?.phonetic || j?.[0]?.phonetics?.find((x: { text?: string }) => x?.text)?.text || "";
+        const clean = raw.replace(/^\/+|\/+$/g, "").trim();
+        if (!clean) throw new Error("empty");
+        if (dead) return;
+        try { window.localStorage.setItem(`ph:${key}`, clean); } catch {}
+        setPh((m) => ({ ...m, [key]: clean }));
+      } catch {
+        try { window.localStorage.setItem(`phmiss:${key}`, "1"); } catch {}
+      }
+    })();
+    return () => { dead = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cur?.word]);
+
 
   async function flushErrors() {
     if (!errIds.size) return;
@@ -160,6 +192,11 @@ export default function RecitePage() {
       {/* 单词区 */}
       <div className="flex flex-1 flex-col items-center justify-center text-center">
         <p className="text-5xl font-bold tracking-wide text-slate-900 dark:text-white sm:text-6xl">{cur.word}</p>
+        {ph[cur.word.trim().toLowerCase()] ? (
+          <p className="mt-3 text-base font-medium tracking-[0.03em] text-primary-600/90 dark:text-primary-400/90">
+            /{ph[cur.word.trim().toLowerCase()]}/
+          </p>
+        ) : null}
         {cur.meaning ? <p className="mt-4 max-w-md text-sm leading-relaxed text-slate-500 dark:text-slate-400">{cur.meaning}</p> : null}
         {cur.is_phrase ? <span className="mt-3 rounded-full bg-slate-100 px-3 py-0.5 text-xs text-slate-400 dark:bg-slate-800">短语</span> : null}
       </div>
