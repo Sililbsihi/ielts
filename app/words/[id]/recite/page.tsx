@@ -57,7 +57,7 @@ export default function RecitePage() {
     try {
       const cached = window.localStorage.getItem(`ph:${key}`);
       if (cached) { setPh((m) => (m[key] ? m : { ...m, [key]: cached })); return; }
-      if (window.localStorage.getItem(`phmiss:${key}`)) return;
+      if (window.localStorage.getItem(`phmiss2:${key}`)) return;
     } catch { /* localStorage 不可用则直接查 */ }
     let dead = false;
     void (async () => {
@@ -71,7 +71,7 @@ export default function RecitePage() {
         try { window.localStorage.setItem(`ph:${key}`, clean); } catch {}
         setPh((m) => ({ ...m, [key]: clean }));
       } catch {
-        try { window.localStorage.setItem(`phmiss:${key}`, "1"); } catch {}
+        try { window.localStorage.setItem(`phmiss2:${key}`, "1"); } catch {}
       }
     })();
     return () => { dead = true; };
