@@ -62,11 +62,10 @@ export default function RecitePage() {
     let dead = false;
     void (async () => {
       try {
-        const r = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(key)}`);
+        const r = await fetch(`/api/phonetic?w=${encodeURIComponent(key)}`);
         if (!r.ok) throw new Error("miss");
         const j = await r.json();
-        const raw: string = j?.[0]?.phonetic || j?.[0]?.phonetics?.find((x: { text?: string }) => x?.text)?.text || "";
-        const clean = raw.replace(/^\/+|\/+$/g, "").trim();
+        const clean: string = j?.phonetic || "";
         if (!clean) throw new Error("empty");
         if (dead) return;
         try { window.localStorage.setItem(`ph:${key}`, clean); } catch {}
